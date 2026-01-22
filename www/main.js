@@ -4,249 +4,303 @@ const outcomeEl = document.getElementById("outcome");
 const spinButton = document.getElementById("spin-button");
 const betInput = document.getElementById("bet-input");
 const creditButton = document.getElementById("credit-button");
-const slotCards = Array.from(document.querySelectorAll(".slot-card"));
-const slotEls = Array.from(document.querySelectorAll("[data-slot]"));
+const slotsGrid = document.getElementById("slots-grid");
+const slotsPanel = document.querySelector(".slots-panel");
+const flashOverlay = document.getElementById("flash-overlay");
+const confettiCanvas = document.getElementById("confetti-canvas");
+const ctx = confettiCanvas.getContext("2d");
 
 const SYMBOL_CLASSES = ["circle", "square", "triangle"];
+const COLS = 12;
+const ROWS = 8;
+const TOTAL_SLOTS = COLS * ROWS;
 
-// Timing for sequential reel stops
-const SPIN_CYCLE_INTERVAL = 60; // ms between symbol changes
-const REEL_STOP_DELAYS = [800, 1400, 2000]; // when each reel stops (ms)
+const SPIN_CYCLE_INTERVAL = 55;
+const COLUMN_STOP_BASE_DELAY = 200;
+const COLUMN_STOP_INCREMENT = 100;
 
-let balance = 999;
-let spinFn = null;
+let balance = 1000;
 let isSpinning = false;
-let spinIntervals = [null, null, null];
+let spinIntervals = [];
+let slotCards = [];
+let slotEls = [];
+
+// Particles
+let particles = [];
+let animationId = null;
+
+function resizeCanvas() {
+  confettiCanvas.width = window.innerWidth;
+  confettiCanvas.height = window.innerHeight;
+}
+resizeCanvas();
+window.addEventListener("resize", resizeCanvas);
+
+class ShapeParticle {
+  constructor(fromLeft) {
+    this.x = fromLeft ? -20 : confettiCanvas.width + 20;
+    this.y = Math.random() * confettiCanvas.height;
+    this.size = Math.random() * 8 + 4;
+    this.speedX = (fromLeft ? 1 : -1) * (Math.random() * 10 + 5);
+    this.speedY = Math.random() * 4 - 2;
+    this.hue = Math.random() * 60 + 30;
+    this.life = 1;
+    this.decay = 0.025;
+  }
+
+  update() {
+    this.x += this.speedX;
+    this.y += this.speedY;
+    this.life -= this.decay;
+    this.speedX *= 0.98;
+  }
+
+  draw() {
+    if (this.life <= 0) return;
+    ctx.save();
+    ctx.globalAlpha = this.life;
+    ctx.fillStyle = `hsl(${this.hue}, 100%, 50%)`;
+    ctx.beginPath();
+    ctx.arc(this.x, this.y, this.size / 2, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  isDead() { return this.life <= 0; }
+}
+
+function spawnParticles(amount) {
+  for (let i = 0; i < amount / 2; i++) {
+    particles.push(new ShapeParticle(true));
+    particles.push(new ShapeParticle(false));
+  }
+  if (!animationId) animateParticles();
+}
+
+function animateParticles() {
+  ctx.clearRect(0, 0, confettiCanvas.width, confettiCanvas.height);
+  particles = particles.filter(p => !p.isDead());
+  for (const p of particles) { p.update(); p.draw(); }
+  animationId = particles.length > 0 ? requestAnimationFrame(animateParticles) : null;
+}
+
+function createGrid() {
+  slotsGrid.innerHTML = "";
+  slotCards = [];
+  slotEls = [];
+
+  for (let i = 0; i < TOTAL_SLOTS; i++) {
+    const card = document.createElement("div");
+    card.className = "slot-card";
+
+    const symbol = document.createElement("div");
+    symbol.className = "symbol circle";
+
+    card.appendChild(symbol);
+    slotsGrid.appendChild(card);
+
+    slotCards.push(card);
+    slotEls.push(symbol);
+  }
+
+  spinIntervals = new Array(TOTAL_SLOTS).fill(null);
+}
 
 function formatMoney(amount) {
-  return `$${amount}`;
+  return `$${amount.toLocaleString()}`;
 }
 
 function setDelta(delta) {
-  const sign = delta >= 0 ? "+" : "-";
-  deltaEl.textContent = `${sign}${formatMoney(Math.abs(delta))}`;
+  deltaEl.textContent = delta === 0 ? "$0" : `${delta > 0 ? "+" : ""}${formatMoney(delta)}`;
   deltaEl.classList.toggle("is-positive", delta > 0);
 }
 
-function setSymbolForSlot(slotIndex, symbolIndex) {
-  const slot = slotEls[slotIndex];
-  SYMBOL_CLASSES.forEach((cls) => slot.classList.remove(cls));
-  slot.classList.add(SYMBOL_CLASSES[symbolIndex]);
+function setSymbol(idx, symIdx) {
+  slotEls[idx].className = `symbol ${SYMBOL_CLASSES[symIdx]}`;
 }
 
-function setSymbols(symbols) {
-  slotEls.forEach((slot, index) => {
-    SYMBOL_CLASSES.forEach((cls) => slot.classList.remove(cls));
-    slot.classList.add(SYMBOL_CLASSES[symbols[index]]);
-  });
+function clearEffects() {
+  slotCards.forEach(c => c.classList.remove("is-winner", "is-jackpot-winner"));
+  slotsPanel.classList.remove("is-winning", "is-jackpot");
+  outcomeEl.classList.remove("is-winning", "is-jackpot");
+  flashOverlay.classList.remove("is-flashing", "is-jackpot-flashing");
 }
 
-function setOutcome(outcome) {
+function highlightWinners(cells, isJackpot) {
+  const cls = isJackpot ? "is-jackpot-winner" : "is-winner";
+  cells.forEach(i => slotCards[i].classList.add(cls));
+}
+
+function triggerEffects(outcome, cells, lines) {
+  const isJackpot = outcome === "WIN_JACKPOT";
+  const isWin = outcome !== "LOSE";
+
+  if (isWin) {
+    slotsPanel.classList.add(isJackpot ? "is-jackpot" : "is-winning");
+    outcomeEl.classList.add(isJackpot ? "is-jackpot" : "is-winning");
+    highlightWinners(cells, isJackpot);
+    flashOverlay.classList.add(isJackpot ? "is-jackpot-flashing" : "is-flashing");
+    spawnParticles(isJackpot ? 40 : Math.min(lines * 5, 25));
+
+    setTimeout(() => {
+      slotsPanel.classList.remove("is-winning", "is-jackpot");
+      flashOverlay.classList.remove("is-flashing", "is-jackpot-flashing");
+    }, isJackpot ? 500 : 350);
+  }
+}
+
+function setOutcome(outcome, lines) {
   if (outcome === "LOSE") {
-    outcomeEl.textContent = "LOSE";
+    outcomeEl.textContent = "TRY AGAIN";
   } else if (outcome === "WIN_JACKPOT") {
-    outcomeEl.textContent = "JACKPOT!";
+    outcomeEl.textContent = `🔥 MEGA WIN! 🔥\n${lines} LINES`;
   } else if (outcome === "WIN_SMALL") {
-    outcomeEl.textContent = "PUSH";
+    outcomeEl.textContent = `${lines} LINE${lines > 1 ? "S" : ""}`;
   } else {
-    outcomeEl.textContent = "WIN";
+    outcomeEl.textContent = `WIN!\n${lines} LINES`;
   }
 }
 
 function getBet() {
-  const value = Number.parseInt(betInput.value, 10);
-  if (Number.isNaN(value) || value <= 0) {
-    return 1;
-  }
-  return value;
+  const v = parseInt(betInput.value, 10);
+  return isNaN(v) || v <= 0 ? 1 : v;
 }
 
-function refreshSpinState() {
+function refreshState() {
   const bet = getBet();
   spinButton.disabled = isSpinning || balance < bet;
-  if (!isSpinning && balance < bet) {
-    outcomeEl.textContent = "NO FUNDS";
-  }
+  if (!isSpinning && balance < bet) outcomeEl.textContent = "ADD CREDITS";
 }
 
-// Start rapid symbol cycling for a single reel
-function startReelSpin(reelIndex) {
-  let currentSymbol = 0;
-  slotCards[reelIndex].classList.add("is-spinning");
-  slotCards[reelIndex].classList.remove("is-landing");
+function getColIndices(col) {
+  const arr = [];
+  for (let row = 0; row < ROWS; row++) arr.push(row * COLS + col);
+  return arr;
+}
 
-  spinIntervals[reelIndex] = setInterval(() => {
-    currentSymbol = (currentSymbol + 1) % 3;
-    setSymbolForSlot(reelIndex, currentSymbol);
+function startSpin(idx) {
+  let sym = 0;
+  slotCards[idx].classList.add("is-spinning");
+  slotCards[idx].classList.remove("is-landing", "is-winner", "is-jackpot-winner");
+  spinIntervals[idx] = setInterval(() => {
+    sym = (sym + 1) % SYMBOL_CLASSES.length;
+    setSymbol(idx, sym);
   }, SPIN_CYCLE_INTERVAL);
 }
 
-// Stop a reel and land on final symbol
-function stopReelSpin(reelIndex, finalSymbol) {
-  if (spinIntervals[reelIndex]) {
-    clearInterval(spinIntervals[reelIndex]);
-    spinIntervals[reelIndex] = null;
+function stopSpin(idx, finalSym) {
+  if (spinIntervals[idx]) {
+    clearInterval(spinIntervals[idx]);
+    spinIntervals[idx] = null;
   }
-
-  slotCards[reelIndex].classList.remove("is-spinning");
-  slotCards[reelIndex].classList.add("is-landing");
-  setSymbolForSlot(reelIndex, finalSymbol);
-
-  // Remove landing class after animation
-  setTimeout(() => {
-    slotCards[reelIndex].classList.remove("is-landing");
-  }, 300);
+  slotCards[idx].classList.remove("is-spinning");
+  slotCards[idx].classList.add("is-landing");
+  setSymbol(idx, finalSym);
+  setTimeout(() => slotCards[idx].classList.remove("is-landing"), 150);
 }
 
-function startSpinAnimation() {
+function stopCol(col, symbols) {
+  getColIndices(col).forEach(i => stopSpin(i, symbols[i]));
+}
+
+function startAnimation() {
   isSpinning = true;
   spinButton.classList.add("is-spinning");
   spinButton.disabled = true;
-  outcomeEl.textContent = "...";
-
-  // Start all reels spinning
-  for (let i = 0; i < 3; i++) {
-    startReelSpin(i);
-  }
+  spinButton.textContent = "...";
+  outcomeEl.textContent = "";
+  clearEffects();
+  for (let i = 0; i < TOTAL_SLOTS; i++) startSpin(i);
 }
 
-function stopAllReels() {
-  for (let i = 0; i < 3; i++) {
-    if (spinIntervals[i]) {
-      clearInterval(spinIntervals[i]);
-      spinIntervals[i] = null;
-    }
-    slotCards[i].classList.remove("is-spinning", "is-landing");
-  }
-  spinButton.classList.remove("is-spinning");
-  isSpinning = false;
-}
-
-async function setup() {
-  try {
-    const wasm = await import("./pkg/gambling.js");
-    await wasm.default();
-    spinFn = wasm.spin;
-  } catch (error) {
-    spinFn = null;
-    console.warn("WASM not loaded, falling back to JS spin.", error);
-  }
+function setup() {
+  createGrid();
+  spinButton.textContent = "SPIN";
   balanceEl.textContent = formatMoney(balance);
-  setDelta(-getBet());
-  setOutcome("LOSE");
-  refreshSpinState();
+  setDelta(0);
+  refreshState();
 
-  betInput.addEventListener("input", refreshSpinState);
+  betInput.addEventListener("input", refreshState);
   creditButton.addEventListener("click", () => {
-    balance += 100;
+    balance += 500;
     balanceEl.textContent = formatMoney(balance);
-    refreshSpinState();
+    refreshState();
   });
 
   spinButton.addEventListener("click", () => {
     if (isSpinning) return;
-
     const bet = getBet();
     if (balance < bet) return;
 
-    // Get result immediately
-    const result = spinFn ? spinFn(balance, bet) : spinFallback(balance, bet);
-    const { symbols, delta, balance: nextBalance, outcome } = result;
+    const result = spin(balance, bet);
+    startAnimation();
 
-    // Start all reels spinning
-    startSpinAnimation();
-
-    // Stop each reel one by one
-    REEL_STOP_DELAYS.forEach((delay, reelIndex) => {
+    for (let col = 0; col < COLS; col++) {
       setTimeout(() => {
-        stopReelSpin(reelIndex, symbols[reelIndex]);
-
-        // After last reel stops, update game state
-        if (reelIndex === 2) {
+        stopCol(col, result.symbols);
+        if (col === COLS - 1) {
           setTimeout(() => {
             spinButton.classList.remove("is-spinning");
+            spinButton.textContent = "SPIN";
             isSpinning = false;
-
-            balance = nextBalance;
+            balance = result.balance;
             balanceEl.textContent = formatMoney(balance);
-            setDelta(delta);
-            setOutcome(outcome);
-            refreshSpinState();
-          }, 350);
+            setDelta(result.delta);
+            setOutcome(result.outcome, result.lines_won);
+            triggerEffects(result.outcome, result.winning_cells, result.lines_won);
+            refreshState();
+          }, 200);
         }
-      }, delay);
-    });
+      }, COLUMN_STOP_BASE_DELAY + col * COLUMN_STOP_INCREMENT);
+    }
   });
 }
 
 setup();
 
-/**
- * JS fallback with realistic ~96% RTP
- * - Jackpot (2%): 3 matching, pays 12x
- * - Big Win (10%): 2 matching, pays 2x
- * - Small Win (20%): 2 matching, pays 1x
- * - Lose (68%): no match
- */
-function spinFallback(balanceValue, bet) {
-  const roll = Math.floor(Math.random() * 100);
+function findWins(symbols) {
+  let mult = 0;
+  const cells = [];
+  let lines = 0;
 
-  let symbols, delta, outcome;
+  for (let row = 0; row < ROWS; row++) {
+    const start = row * COLS;
+    let col = 0;
+    while (col < COLS) {
+      const sym = symbols[start + col];
+      let run = 1;
+      while (col + run < COLS && symbols[start + col + run] === sym) run++;
 
-  if (roll < 2) {
-    // Jackpot
-    const sym = Math.floor(Math.random() * 3);
-    symbols = [sym, sym, sym];
-    delta = bet * 12;
-    outcome = "WIN_JACKPOT";
-  } else if (roll < 12) {
-    // Big win
-    symbols = generateTwoMatch();
-    delta = bet * 2;
-    outcome = "WIN";
-  } else if (roll < 32) {
-    // Small win (break even)
-    symbols = generateTwoMatch();
-    delta = bet;
-    outcome = "WIN_SMALL";
-  } else {
-    // Lose
-    symbols = generateAllDifferent();
-    delta = -bet;
-    outcome = "LOSE";
+      if (run >= 3) {
+        const m = { 3: 0.3, 4: 0.8, 5: 1.5, 6: 3, 7: 6, 8: 12, 9: 25, 10: 50, 11: 75, 12: 150 };
+        mult += m[run] || 0;
+        lines++;
+        for (let i = 0; i < run; i++) cells.push(start + col + i);
+      }
+      col += run;
+    }
+  }
+
+  return { mult, cells, lines };
+}
+
+function spin(bal, bet) {
+  const symbols = Array.from({ length: TOTAL_SLOTS }, () => Math.floor(Math.random() * SYMBOL_CLASSES.length));
+  const { mult, cells, lines } = findWins(symbols);
+  const win = Math.floor(bet * mult);
+  const delta = win - bet;
+
+  let outcome = "LOSE";
+  if (lines > 0) {
+    outcome = mult >= 20 ? "WIN_JACKPOT" : mult >= 4 ? "WIN" : "WIN_SMALL";
   }
 
   return {
     symbols,
     delta,
-    balance: Math.max(0, balanceValue + delta),
+    balance: Math.max(0, bal + delta),
     outcome,
+    winning_cells: cells,
+    lines_won: lines,
   };
-}
-
-function generateTwoMatch() {
-  const matching = Math.floor(Math.random() * 3);
-  const different = (matching + 1 + Math.floor(Math.random() * 2)) % 3;
-  const pos = Math.floor(Math.random() * 3);
-
-  if (pos === 0) return [different, matching, matching];
-  if (pos === 1) return [matching, different, matching];
-  return [matching, matching, different];
-}
-
-function generateAllDifferent() {
-  const first = Math.floor(Math.random() * 3);
-  const second = (first + 1) % 3;
-  const third = (first + 2) % 3;
-
-  const orders = [
-    [first, second, third],
-    [first, third, second],
-    [second, first, third],
-    [second, third, first],
-    [third, first, second],
-    [third, second, first],
-  ];
-
-  return orders[Math.floor(Math.random() * 6)];
 }

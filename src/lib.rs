@@ -2,88 +2,114 @@ use js_sys::Math;
 use serde::Serialize;
 use wasm_bindgen::prelude::*;
 
-/// Realistic slot machine with ~96% RTP (Return To Player)
-/// 
-/// Payout structure:
-/// - Jackpot (2%): 3 matching symbols, pays 12x bet
-/// - Big Win (10%): 2 matching symbols, pays 2x bet  
-/// - Small Win (20%): 2 matching symbols, pays 1x bet (break even)
-/// - Lose (68%): no matches, loses bet
-///
-/// Expected value: 0.02*12 + 0.10*2 + 0.20*1 - 0.68*1 = -0.04 per unit = 96% RTP
+const GRID_SIZE: usize = 10;
+const TOTAL_SLOTS: usize = GRID_SIZE * GRID_SIZE;
+
+/// Line-based slot machine with realistic payouts
+/// Wins when 3+ consecutive matching symbols appear in a row
 
 #[derive(Serialize)]
 struct SpinResult {
-    symbols: [u8; 3],
+    symbols: Vec<u8>,
     delta: i32,
     balance: i32,
     outcome: String,
+    winning_cells: Vec<usize>,
+    lines_won: u32,
 }
 
 fn random_symbol() -> u8 {
     (Math::random() * 3.0).floor() as u8
 }
 
-fn random_percent() -> u8 {
-    (Math::random() * 100.0).floor() as u8
+fn generate_random() -> Vec<u8> {
+    (0..TOTAL_SLOTS).map(|_| random_symbol()).collect()
 }
 
-fn generate_two_match() -> [u8; 3] {
-    let matching = random_symbol();
-    let different = (matching + 1 + (Math::random() * 2.0).floor() as u8) % 3;
-    
-    // Randomly choose which position is different
-    let pos = (Math::random() * 3.0).floor() as u8;
-    match pos {
-        0 => [different, matching, matching],
-        1 => [matching, different, matching],
-        _ => [matching, matching, different],
-    }
-}
+/// Find all winning lines and return (total_multiplier, winning_cell_indices, lines_count)
+fn find_winning_lines(symbols: &[u8]) -> (f64, Vec<usize>, u32) {
+    let mut total_multiplier = 0.0;
+    let mut winning_cells: Vec<usize> = Vec::new();
+    let mut lines_won = 0u32;
 
-fn generate_all_different() -> [u8; 3] {
-    let first = random_symbol();
-    let second = (first + 1) % 3;
-    let third = (first + 2) % 3;
-    
-    // Shuffle positions
-    let order = (Math::random() * 6.0).floor() as u8;
-    match order {
-        0 => [first, second, third],
-        1 => [first, third, second],
-        2 => [second, first, third],
-        3 => [second, third, first],
-        4 => [third, first, second],
-        _ => [third, second, first],
+    // Check each row for horizontal matches
+    for row in 0..GRID_SIZE {
+        let row_start = row * GRID_SIZE;
+        let mut col = 0;
+
+        while col < GRID_SIZE {
+            let current_sym = symbols[row_start + col];
+            let mut run_length = 1;
+
+            // Count consecutive matching symbols
+            while col + run_length < GRID_SIZE
+                && symbols[row_start + col + run_length] == current_sym
+            {
+                run_length += 1;
+            }
+
+            // Award based on run length (3+ matches)
+            if run_length >= 3 {
+                let multiplier = match run_length {
+                    3 => 0.2,   // 3 in a row
+                    4 => 0.5,   // 4 in a row
+                    5 => 1.0,   // 5 in a row
+                    6 => 2.0,   // 6 in a row
+                    7 => 4.0,   // 7 in a row
+                    8 => 8.0,   // 8 in a row
+                    9 => 16.0,  // 9 in a row
+                    10 => 50.0, // Full line!
+                    _ => 0.0,
+                };
+                total_multiplier += multiplier;
+                lines_won += 1;
+
+                // Mark winning cells
+                for i in 0..run_length {
+                    winning_cells.push(row_start + col + i);
+                }
+            }
+
+            col += run_length;
+        }
     }
+
+    (total_multiplier, winning_cells, lines_won)
 }
 
 #[wasm_bindgen]
 pub fn spin(balance: i32, bet: i32) -> JsValue {
     let bet = bet.max(1);
-    let roll = random_percent();
-    
-    let (symbols, delta, outcome) = if roll < 2 {
-        // Jackpot: 2% chance, pays 12x
-        let sym = random_symbol();
-        ([sym, sym, sym], bet * 12, "WIN_JACKPOT")
-    } else if roll < 12 {
-        // Big win: 10% chance, pays 2x
-        (generate_two_match(), bet * 2, "WIN")
-    } else if roll < 32 {
-        // Small win: 20% chance, pays 1x (break even)
-        (generate_two_match(), bet, "WIN_SMALL")
+
+    // Generate random symbols
+    let symbols = generate_random();
+
+    // Find winning lines
+    let (multiplier, winning_cells, lines_won) = find_winning_lines(&symbols);
+
+    // Calculate delta (win - bet)
+    let winnings = (bet as f64 * multiplier).floor() as i32;
+    let delta = winnings - bet;
+
+    let outcome = if lines_won == 0 {
+        "LOSE"
+    } else if multiplier >= 10.0 {
+        "WIN_JACKPOT"
+    } else if multiplier >= 2.0 {
+        "WIN"
     } else {
-        // Lose: 68% chance
-        (generate_all_different(), -bet, "LOSE")
+        "WIN_SMALL"
     };
 
-    let balance = (balance + delta).max(0);
+    let new_balance = (balance + delta).max(0);
+
     let result = SpinResult {
         symbols,
         delta,
-        balance,
+        balance: new_balance,
         outcome: outcome.to_string(),
+        winning_cells,
+        lines_won,
     };
 
     serde_wasm_bindgen::to_value(&result).unwrap()
