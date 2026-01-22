@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Simple Slot</title>
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <main class="screen">
+      <div class="hud">
+        <div class="balance" id="balance">$999</div>
+        <div class="delta" id="delta">-$20</div>
+      </div>
+
+      <div class="controls">
+        <label class="bet">
+          <span class="bet__label">BET</span>
+          <input id="bet-input" type="number" min="1" step="1" value="20" />
+        </label>
+        <button class="credit-button" id="credit-button" type="button">
+          Add $100
+        </button>
+      </div>
+
+      <section class="slots" aria-label="Slot reels">
+        <div class="slot-card">
+          <div class="symbol circle" data-slot="0" aria-hidden="true"></div>
+        </div>
+        <div class="slot-card">
+          <div class="symbol square" data-slot="1" aria-hidden="true"></div>
+        </div>
+        <div class="slot-card">
+          <div class="symbol triangle" data-slot="2" aria-hidden="true"></div>
+        </div>
+      </section>
+
+      <div class="outcome" id="outcome">LOSE</div>
+
+      <button class="spin-button" id="spin-button" type="button">
+        <span class="spin-button__inner" aria-hidden="true"></span>
+      </button>
+    </main>
+
+    <script type="module" src="./main.js"></script>
+  </body>
+</html>

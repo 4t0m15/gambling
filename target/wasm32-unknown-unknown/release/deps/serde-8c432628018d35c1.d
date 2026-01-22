@@ -1,0 +1,14 @@
+/Users/arsen/Documents/git/gambling/target/wasm32-unknown-unknown/release/deps/serde-8c432628018d35c1.d: /Users/arsen/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/lib.rs /Users/arsen/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/integer128.rs /Users/arsen/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/mod.rs /Users/arsen/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/de.rs /Users/arsen/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/ser.rs /Users/arsen/Documents/git/gambling/target/wasm32-unknown-unknown/release/build/serde-84c8cb5996c481e7/out/private.rs
+
+/Users/arsen/Documents/git/gambling/target/wasm32-unknown-unknown/release/deps/libserde-8c432628018d35c1.rlib: /Users/arsen/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/lib.rs /Users/arsen/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/integer128.rs /Users/arsen/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/mod.rs /Users/arsen/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/de.rs /Users/arsen/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/ser.rs /Users/arsen/Documents/git/gambling/target/wasm32-unknown-unknown/release/build/serde-84c8cb5996c481e7/out/private.rs
+
+/Users/arsen/Documents/git/gambling/target/wasm32-unknown-unknown/release/deps/libserde-8c432628018d35c1.rmeta: /Users/arsen/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/lib.rs /Users/arsen/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/integer128.rs /Users/arsen/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/mod.rs /Users/arsen/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/de.rs /Users/arsen/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/ser.rs /Users/arsen/Documents/git/gambling/target/wasm32-unknown-unknown/release/build/serde-84c8cb5996c481e7/out/private.rs
+
+/Users/arsen/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/lib.rs:
+/Users/arsen/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/integer128.rs:
+/Users/arsen/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/mod.rs:
+/Users/arsen/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/de.rs:
+/Users/arsen/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/ser.rs:
+/Users/arsen/Documents/git/gambling/target/wasm32-unknown-unknown/release/build/serde-84c8cb5996c481e7/out/private.rs:
+
+# env-dep:OUT_DIR=/Users/arsen/Documents/git/gambling/target/wasm32-unknown-unknown/release/build/serde-84c8cb5996c481e7/out
